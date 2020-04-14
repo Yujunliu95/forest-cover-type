@@ -1,0 +1,513 @@
+---
+title: "STAT 5003 - Exploratory Data Analysis (EDA)"
+author: "Group 13"
+date: "9/29/2019"
+output: html_document
+---
+
+# Final Report
+Dataset: Classification of Forest Cover Type
+
+Deliverable Three: Final presentation and report
+
+Group Member:
+
+  Jiayu Gao 490213012 / Yilin Wang 490142480 / Yudong Nie 480545891 / Yujun Liu 480422097 / Ziang Zhang 480563057
+
+```{r library}
+#Loading libraries
+library(ggplot2)
+library(corrgram)
+library(MASS)
+library(caret) 
+library(e1071) 
+library(reshape2)
+library(corrplot)
+library(splitstackshape)
+library(caTools)
+library(pROC)
+library(gridExtra)
+```
+
+# 1. Overview of the problem
+
+The aim of this project is to categorize the forest cover type based on the natural information obtained from USGS such as soil type and elevation. The target classes include seven verified forest cover type and each sample from the dataset indicate the class it belongs with corresponding attributes data. The process of solving this problem is to assign the testing data into predetermined characteristics from training data hence it’s a typical classification problem.
+Classification of forest type result of the ecological process is significant since it can make forest protection and other operation by different organizations more targeted. Moreover, it is important to make good use of forest resources. Therefore, predominate the forest type in different regions with various natural conditions can make the use of forest resources more efficient. Studies have shown that forest type is important in shaping the altitude change of radial growth response to climate change. The accurate definition of forest type can reflect the information of conditions of soil, water and more. This information will further help to predict the elements of local climate. The relationship between this project and current research is it provides an anticipation of which type of the unknown forest belongs according to already confirmed data. The accuracy of the applied classification models can be compared to the definition determined by the government to check how well the models perform. Various types of forest have their own features and abilities, such as carbon storage and distribution, bird’s attraction. Therefore, the research of this topic can direct government strategy involving agriculture and environment.
+
+# 2. Data cleaning and data wrangling
+Raw dataset downloaded from the website does not include attribute titles. In order to call the columns easily, titles are added to each column. Overview of the dataset is shown below. The data frame has 56 columns and 15120 rows shown above with the last column being the cover_type which is also our predicted value.The first column is the id of each data and is irrelevant to our dataset.
+
+```{r dataset}
+# Read data
+train <- read.delim("covtype.txt")
+names(train) <- c("Elevation", "Aspect", "Slope", "Horizontal_Distance_To_Hydrology", "Vertical_Distance_To_Hydrology", "Horizontal_Distance_To_Roadways", "Hillshade_9am", "Hillshade_Noon", "Hillshade_3pm", "Horizontal_Distance_To_Fire_Points", "Wilderness_Area1", "Wilderness_Area2", "Wilderness_Area3", "Wilderness_Area4", "Soil_Type1", "Soil_Type2","Soil_Type3","Soil_Type4","Soil_Type5","Soil_Type6","Soil_Type7","Soil_Type8","Soil_Type9","Soil_Type10","Soil_Type11", "Soil_Type12", "Soil_Type13","Soil_Type14","Soil_Type15","Soil_Type16","Soil_Type17","Soil_Type18","Soil_Type19","Soil_Type20","Soil_Type21","Soil_Type22", "Soil_Type23","Soil_Type24","Soil_Type25","Soil_Type26","Soil_Type27","Soil_Type28","Soil_Type29","Soil_Type30","Soil_Type31", "Soil_Type32", "Soil_Type33","Soil_Type34","Soil_Type35","Soil_Type36","Soil_Type37","Soil_Type38","Soil_Type39","Soil_Type40", "Cover_Type")
+dim(train)
+#summary(train)
+#str(train)
+```
+
+# 3. Dataset description
+This dataset is about forest cover type and achieved from https://archive.ics.uci.edu/ml/datasets/covertype. The downloaded data is in the format of a zip file. After unzipping it, the data file becomes covtype.data. The dataset has multivariate characteristics, with 581012 samples. There are 55 variables in the dataset with the last column being the cover type of the forest. The meanings for the columns in the dataset are listed in the appendix.
+There are 4 types of wilderness areas, including Rawah Wilderness Area - 1, Neota Wilderness Area - 2, Comanche Peak Wilderness Area - 3 and Cache la Poudre Wilderness Area - 4. There are 40 soil types in this dataset from 1 to 40 based on the USFS Ecological Landtype Units (ELUs). It is listed in the Appendix. The Cover_Type is an integer ranging from 1 to 7, indicating the forest cover type. Statistics of different cover type is shown in the bar chart below.
+
+```{r}
+covertype <- table(train$Cover_Type)
+covertype <- data.frame(covertype)
+names(covertype) <- c("type", "Frequency")
+cover_label <- c("Spruce/Fir", "Lodgepole Pine", "Ponderosa Pine", "Cottonwood/Willow", "Aspen", "Douglas-fir", "Krummholz")
+ggplot(covertype, aes(x = type, y = Frequency, fill = type)) + geom_bar(stat = "identity") + 
+  ggtitle("Forest Cover Type Distribution") +
+  theme(plot.title = element_text(hjust = 0.5)) +
+  scale_fill_discrete(name="Type",
+                         breaks=c("1", "2", "3", "4", "5", "6", "7"),
+                         labels=cover_label)
+
+
+```
+
+
+
+Then we checked if there is any missing value exists in the data frame. Fortunately, there is no missing value in this dataset.
+```{r missing value}
+table(is.na(train))
+```
+
+# 4. Exploratory data analysis (EDA)
+
+## 1. Check Outliers of the Dataset
+```{r outlier elevation}
+train1 <- train[, c("Elevation","Aspect","Slope","Horizontal_Distance_To_Hydrology", 
+                   "Vertical_Distance_To_Hydrology","Horizontal_Distance_To_Roadways",
+                   "Hillshade_9am","Hillshade_Noon", "Hillshade_3pm","Horizontal_Distance_To_Fire_Points","Cover_Type")]
+parameters <- names(train1)
+cover_label <- c("Spruce/Fir", "Lodgepole Pine", "Ponderosa Pine", "Cottonwood/Willow", "Aspen", "Douglas-fir", "Krummholz")
+p1 <- ggplot(data = train1, aes(factor(Cover_Type), train1[,parameters[1]], fill = factor(Cover_Type)))
+p1 <- p1 + geom_boxplot() + ylab(parameters[1]) + scale_fill_discrete(name = "Cover Type", breaks = c("1", "2", "3", "4", "5", "6", "7"),
+                                                                    labels = cover_label)
+
+p2 <- ggplot(data = train1, aes(factor(Cover_Type), train1[,parameters[2]], fill = factor(Cover_Type)))
+
+p2 <- p2 + geom_boxplot() + ylab(parameters[2]) + scale_fill_discrete(name = "Cover Type", breaks = c("1", "2", "3", "4", "5", "6", "7"),
+labels = cover_label)                                                                  
+p3 <- ggplot(data = train1, aes(factor(Cover_Type), train1[,parameters[3]], fill = factor(Cover_Type)))
+p3 <- p3 + geom_boxplot() + ylab(parameters[3]) + scale_fill_discrete(name = "Cover Type", breaks = c("1", "2", "3", "4", "5", "6", "7"),
+                                                                    labels = cover_label)
+
+p4 <- ggplot(data = train1, aes(factor(Cover_Type), train1[,parameters[4]], fill = factor(Cover_Type)))
+p4 <- p4 + geom_boxplot() + ylab(parameters[4]) + scale_fill_discrete(name = "Cover Type",
+                                                                     breaks = c("1", "2", "3", "4", "5", "6", "7"),
+                                                                     labels = cover_label)
+
+p5 <- ggplot(data = train1, aes(factor(Cover_Type), train1[,parameters[5]], fill = factor(Cover_Type)))
+p5<- p5 + geom_boxplot() + ylab(parameters[5]) + scale_fill_discrete(name = "Cover Type",
+                                                                     breaks = c("1", "2", "3", "4", "5", "6", "7"),
+                                                                     labels = cover_label)
+
+p6 <- ggplot(data = train1, aes(factor(Cover_Type), train1[,parameters[6]], fill = factor(Cover_Type)))
+p6 <- p6 + geom_boxplot() + ylab(parameters[6]) + scale_fill_discrete(name = "Cover Type", breaks = c("1", "2", "3", "4", "5", "6", "7"),
+                                                                    labels = cover_label)
+
+
+p7 <- ggplot(data = train1, aes(factor(Cover_Type), train1[,parameters[7]], fill = factor(Cover_Type)))
+p7<- p7 + geom_boxplot() + ylab(parameters[7]) + scale_fill_discrete(name = "Cover Type",
+                                                                     breaks = c("1", "2", "3", "4", "5", "6", "7"),
+                                                                     labels = cover_label)
+
+p8 <- ggplot(data = train1, aes(factor(Cover_Type), train1[,parameters[8]], fill = factor(Cover_Type)))
+p8<- p8 + geom_boxplot() + ylab(parameters[8]) + scale_fill_discrete(name = "Cover Type",
+                                                                     breaks = c("1", "2", "3", "4", "5", "6", "7"),
+                                                                     labels = cover_label)
+
+p9 <- ggplot(data = train1, aes(factor(Cover_Type), train1[,parameters[9]], fill = factor(Cover_Type)))
+p9<- p9 + geom_boxplot() + ylab(parameters[9]) + scale_fill_discrete(name = "Cover Type",
+                                                                     breaks = c("1", "2", "3", "4", "5", "6", "7"),
+                                                                     labels = cover_label)
+
+p10 <- ggplot(data = train1, aes(factor(Cover_Type), train1[,parameters[10]], fill = factor(Cover_Type)))
+p7 <- p7 + geom_boxplot() + ylab(parameters[10]) + scale_fill_discrete(name = "Cover Type", breaks = c("1", "2", "3", "4", "5", "6", "7"),
+                                                                    labels = cover_label)
+
+grid.arrange(p1,p2,p3,p4,p5,p6,p7,p8,p9,p10,nrow=5)
+```
+
+Elevation:
+The elevation where each forest type grow are obviously various. Moreover, the range elevation for each cover type is small. It reflects elevation is a key attributes which influence the distribution of different types of forest. Elevation can also be recognized as a factor to roughly define the forest cover type.There is no outlier exist for Ponderosa Pine and Cottonwood/Willow. The elevation condition should be more strict for their growth.
+
+Aspect:
+Outlier only exists for Cottonwood/Willow. Majority of Cottonwood/Willow exist at aspect between 85 to 160 azimuth. However, there may exist affiliate type has totally different living condition. The number of affiliate type forest is farly smaller than the major ones. Therefore, they are defined as outliers in this boxplot. Spruce/Fir and Douglass-fir cover type has the largest range of aspect so they should have better adaptability compare to other cover types.
+
+Slope:
+Outlier exists for all cover types except Cottonwood/Willow and the number of outliers is small since every single point can be recognized from the graph. The outliers should be excecutive due to variance of other attributes. On the other hand, outliers only exist at top of boxplots which reflects particular case occurs easier at extremely large slope. For later catagorizing process, these samples can be eliminated from dataset in terms of slope attributes.
+Distance to hydrology
+
+Horizontial distance:
+The range of box for all cover type is between 0 and 500 and median values are all closer to bottom of the box. The distribution of horizontal distance to hydrology is not normal. Hydrology can be recognized as a significant factor for the growth of all forest type. Krummholz has largest box height which means it adapts best in dry area and the requirement of hydrology is not as much as other cover types. Outlier exists for all cover types and they are considered to be removable since the numbers are small.  
+
+Vertical distance:
+Range of vertical distance to hydrology for all cover types are similar. The condition of vertical distance to hydrology to forest growth are similar for all cover types. Therefore, it can not be a significant indicator for caver type catagorization. Different to horizontal distance to hydrogen, outliers exist on both sides of the box except Cottonwood/Willow and Krummholz. Underground water can also provide living conditions for these types of forest.
+
+Distance to roadways
+For attribute 5 which is the Horizontal distance to roadways. This attribute has a relative average median box plot within the seven cover type which indicates the roadways mean of seven forest cover type are between 1000 to 2500. However, the  remotest  distances to roadways appear in Lodgepole Pine which is around 7000 meters. Further, we have 4 cover type contains outliers which are Lodgepole Pine, Ponderosa Pine, Aspen and Douglass-fir. As we could oberve form the graph, forest cover type 3,4 and 6 have the shortest horizaontial distance to the nearest roadways. From graph 1 we know that the Spruce, Lodgepole and Krummholz cover type have the highest elevation. However, in this graph, there are no outliers in cover type Spruce and Krummholz. Hence, we could assume that forest type Spruce and Krummholz has better infrastructure of roadways than cover type Lodgepole.
+
+Hillshade:
+For attribute 6,7,8 which are the different timestamp of the hillshade. Compared the median of this three attributes,  we could observe that all the forest cover type remain relative the same within the timestamp. Further, the median of hillshade reach highest at the time of noon then keep goes down as time goes by. The outliers apply the same track of movement as the median of the hillshade. 
+
+Distance to firepoints:
+For attribute 9 which is the nearest horizontal distance to wildfire ignition points. Outlier exists for all cover types expects Cottonwood and Krummholz. For forest type Spruce and Lodgepole, we could observe there are plenty of outliers appear in highest attitude around 5000-7000. We could assume that cover type Spruce and Lodgepole may be easy falmmable in highest attitude. 
+
+
+## 2. Correlattion Matrix
+
+```{r correlation matrix, fig.height=10, fig.width=20}
+col <- colorRampPalette(c("#BB4444", "#EE9988", "#FFFFFF", "#77AADD", "#4477AA"))
+p.mat <- cor.mtest(cor(train1))
+corrplot(cor(train1), method = "color",type = "upper", addCoef.col = "black", title = "Correlation Matrix",order = "hclust", mar=c(0,0,0.8,0))
+```
+
+The correlation matrix above indicates the correlation among all quantitative variables as well as the cover type. It can be found that cover type is negatively correlated to most quantitative variables except for Aspect, Vertical Distance To Hydrology and Slope. 
+
+We can also observe strong correlation between the following pairs: 
+
+Hillshape_9am & Hillshape_3pm = -0.78
+
+Aspect & Hillshape_3pm = 0.65
+
+Vertical_Distance_To_Hydrology & Horizontal_Distance_To_Hydroplogy = 0.61
+
+Hillshade_Noon & Hillshade_3pm = 0.59
+
+Aspect & Hillshape_9am = -0.58
+
+Hillshade_Noon & Slope = -0.53
+
+The above information indicates an opportunity to reduce feature dimension through feature transformations such as PCA.
+
+## 3. Visualization of PCA for the Two Most Significant Features
+```{r PCA}
+label <- train1[,11]
+traindata <- train1
+
+PCA <- prcomp(traindata[, -11]) 
+Loadings <- as.data.frame(PCA$rotation[,1])
+Loadings
+sum(Loadings^2)
+PCA$sdev
+first.two <- sum(PCA$sdev[0:2])/sum(PCA$sdev)
+first.two
+first.five <- sum(PCA$sdev[0:5])/sum(PCA$sdev)
+first.five
+covertype.df <- data.frame(PC1 = PCA$x[,1], PC2 = PCA$x[,2], labels = as.factor(label))
+ggplot(covertype.df, aes(PC1, PC2, col = labels)) + geom_point()
+```
+
+To visualize the distribution of this dataset in a lower dimension, we applied PCA technique. After PCA processing, numeric features are converted to PCA variables and we used the first two PCA variables to draw the scatter plot. These two variables contain most information of all PCA variables and they explain about 80.454% information of the original dataset. For this plot, different colors of data points represent each corresponding forest type. The horizontal axis is the first PCA variable and the vertical axis is the second PCA variable. 
+From the scatter plot, it is observed that some certain forest type data, such as type3, type 4 and type7, are clustered. They have shown strong characteristics with PCA1 and PCA2 variables. 
+Loadings are interpreted as the coefficients of the linear combination of the initial variables from which the principal components are constructed. We can see that Horizontal_Distance_To_Roadway and Horizontal_Distance_To_Fire_Points are much bigger than other varaiables. Therefore, Horizontal_Distance_To_Roadway and Horizontal_Distance_To_Fire_Points are significant to the classification of forest type.
+
+## 4. Bar Plot
+
+```{r bar, fig.height=20, fig.width=30}
+new <- train[, c("Wilderness_Area1", "Wilderness_Area2", "Wilderness_Area3", "Wilderness_Area4", "Cover_Type")]
+wilderness_label <- c("Rawah Wilderness Area", "Neota Wilderness Area", "Comanche Peak Wilderness Area", "Cache la Poudre Wilderness Area")
+agg <- as.data.frame(aggregate(new,  by=list(new$Cover_Type), FUN="sum"))[, -6]
+agg1 <-  melt(agg, id.vars = "Group.1")
+p <- ggplot(agg1, aes(x = Group.1,  y = value, fill = variable)) + geom_bar(stat = "identity", position = "stack") 
+p.label <- p + xlab("Cover Type") + ylab("Frequency") + ggtitle("Wilderness Area by Cover Type")
+p.theme <-  p.label + theme_classic() + theme(plot.title = element_text(hjust = 0.5, size = 30, face = "bold"), axis.text = element_text(size = 20), text = element_text(size = 25))
+p.scale <- p.theme + scale_fill_discrete(name = "Wilderness Area Type", breaks = c("Wilderness_Area1", "Wilderness_Area2", "Wilderness_Area3", "Wilderness_Area4"), labels = wilderness_label) + scale_x_discrete(limit = c("1", "2", "3", "4", "5", "6", "7"), labels = cover_label) + scale_y_continuous(breaks = c(0, 5000, 50000, 100000, 200000, 300000, 350000))
+p.text <- p.scale + stat_summary(fun.y = sum, aes(label = ..y.., group = Group.1), geom = "text", color = "black", size = 10)
+p.text
+```
+
+From the box plot we could observed that cover type Spruce and Lodgepole take domiant percentages in all the cover types which are 211840 and 283301, respectively. While Cottonwood cover type is the smallest class through all cover types, it is only contain Cache la Poudre wilderness Area within its type. Moreover, cover type Ponderosa Pine, Aspen, Douglas-fir and Krummholz are 35754,9492,17367 and 20510,respectively. From the box plot, we could discover that the quantity of the class are various which indicates the data has a imbalance class. Therefore, we may apply down-sapmling method in the future work. 
+
+```{r bar soil, fig.height = 10, fig.width=15}
+soil.type <- c()
+type <- seq(1, 40)
+for (i in type){
+  soil <- sum(train[, 14+i])
+  soil.type <- c(soil.type, soil)
+}
+soil.type <- data.frame(type, soil.type)
+names(soil.type) <- c("Soil_Type", "Frequency")
+
+color.function <- colorRampPalette( c( "#CCCCCC", "#104E8B" ))
+color.ramp <- color.function(n = 40)
+soil.p <- ggplot(soil.type, aes(x = Soil_Type, y = Frequency)) +geom_bar(fill = color.ramp, stat="identity") + theme_linedraw()
+soil.p + geom_text(aes(label = Frequency), hjust = .5, size =3)
+```
+
+There are 40 soil types in total. From the bar plot above, it is found that Soil Type 29, which is Como - Legault families complex, outstands other soil types with a total number of around 115,246. Some soil types only have a few number of samples. For example, there are only 3 samples of soil type 5 (unspecified in the USFS Soil and ELU Survey). This makes sense because only very few number of soil is unspecified.
+
+# 5.Feature engineering
+
+```{r standardize}
+standardize.numeric <- as.data.frame(scale(train[, 1:10]))
+train.standardize <- cbind(standardize.numeric, train[, 11:55])
+```
+
+# 6. Classification algorithms
+
+Cross validation
+
+```{r cv}
+library(MASS)
+library(caTools)
+set.seed(789)
+train.control = trainControl(method = "repeatedcv", number =10, repeats=3)
+```
+
+# KNN
+
+```{r train_test Split}
+inTrain <- createDataPartition(train.standardize$Cover_Type, p=0.2, list=FALSE)
+train.knn <- train.standardize[inTrain, ]
+test.knn <- train.standardize[ -inTrain, ]
+dim(train.knn)
+dim(test.knn)
+```
+
+```{r knn}
+classifier_knn <- train(factor(Cover_Type) ~ Elevation +
+                            Horizontal_Distance_To_Roadways +
+                            Horizontal_Distance_To_Fire_Points +
+                            Horizontal_Distance_To_Hydrology +
+                            Hillshade_9am,
+                        data=train.knn,
+                        method="knn",
+                        trControl=train.control,
+                        tuneGrid = expand.grid(k = c(1, 5, 10, 15,20)) 
+                        # can also use tunelength
+                        )
+summary(classifier_knn)
+print(classifier_knn)
+plot(classifier_knn)
+```
+
+
+# LDA
+Split balanced data for LDA, Decision Tree, Random Forest and SVM
+
+```{r balance after standardization}
+inTrain <- createDataPartition(train.standardize$Cover_Type, p=0.8, list=FALSE)
+train.raw <- train.standardize[inTrain, ]
+test.raw <- train.standardize[-inTrain, ]
+down_subset <- train.raw[which(train.raw$Cover_Type==1 | train.raw$Cover_Type==2| train.raw$Cover_Type==3), ]
+down <- downSample(x = down_subset[1:54], y =  as.factor(down_subset$Cover_Type), yname = "Cover_Type")
+up_subset <- train.raw[which(train.raw$Cover_Type==3|train.raw$Cover_Type==4|train.raw$Cover_Type==5|train.raw$Cover_Type==6|train.raw$Cover_Type==7),]
+up <- upSample(x = up_subset[1:54], y =  as.factor(up_subset$Cover_Type), yname = "Cover_Type")
+downset <- down[which(down$Cover_Type==1|down$Cover_Type==2), ]
+train.balance <- rbind(downset, up)
+dim(train.balance)
+table(train.balance$Cover_Type)
+```
+
+```{r lda}
+train.lda = train.balance
+test.lda = test.raw
+dim(train.lda)
+dim(test.lda)
+model_lda = train(as.factor(Cover_Type) ~ .,
+                  #data=train.balance,
+                  #method="lda",
+                  #trControl = train.control
+                  #)
+
+summary(model_lda)
+print(model_lda)
+```
+
+# Decision Tree
+```{r balance without standardization}
+inTrain <- createDataPartition(train$Cover_Type, p=0.8, list=FALSE)
+train.raw2 <- train[inTrain, ]
+test.raw2 <- train[-inTrain, ]
+down_subset <- train.raw2[which(train.raw2$Cover_Type==1 | train.raw2$Cover_Type==2| train.raw2$Cover_Type==3), ]
+down <- downSample(x = down_subset[1:54], y =  as.factor(down_subset$Cover_Type), yname = "Cover_Type")
+up_subset <- train.raw2[which(train.raw2$Cover_Type==3|train.raw2$Cover_Type==4|train.raw2$Cover_Type==5|train.raw2$Cover_Type==6|train.raw2$Cover_Type==7),]
+up <- upSample(x = up_subset[1:54], y =  as.factor(up_subset$Cover_Type), yname = "Cover_Type")
+downset <- down[which(down$Cover_Type==1|down$Cover_Type==2), ]
+train.raw.balance <- rbind(downset, up)
+dim(train.raw.balance)
+table(train.raw.balance$Cover_Type)
+```
+
+```{r decision tree}
+train.tree <- train.raw.balance
+test.tree <- test.raw2
+library(rpart) # Prediction: Decision Tree
+library(rpart.plot) # Prediction: Decision Tree
+library(randomForest) # Prediction: Random Forest
+library(caret) # Prediction: k-Fold Cross Validatio
+library(texreg)
+library(corrplot)
+classifier_tree <- train(factor(Cover_Type) ~.,
+                         parms = list(split = "gini"),
+                        data = train.tree,
+                        method = "rpart",
+                        trControl=train.control,
+                        tuneLength = 100
+                        )
+# Tree Visualization
+print(classifier_tree)
+plot(classifier_tree)
+```
+
+
+Check the contribution for each variable and Predict tree
+```{r contribution}
+prp(classifier_tree$finalModel, box.palette = "Reds", tweak = 1.2)
+
+# checking the contribution of each variable
+plot(varImp(classifier_tree),cex.main=1.25, cex.lab=1.5, cex.axis=0.75)
+
+```
+
+# Random Forest (Choose the best 5 variables from decision tree)
+```{r random forest}
+train.rf <- train.raw.balance
+test.rf <- test.raw2
+train.control.rf <- trainControl(method = "repeatedcv", number = 10, repeats=3, search = "grid")
+tunegrid <- expand.grid(.mtry = (1:5))
+classifier_forest = train(factor(Cover_Type) ~ Elevation +
+                            Horizontal_Distance_To_Roadways +
+                            Horizontal_Distance_To_Fire_Points +
+                            Horizontal_Distance_To_Hydrology +
+                            Hillshade_9am,
+                        data = train.rf,
+                        method = "rf",
+                        trControl=train.control.rf,
+                        tuneGrid = tunegrid)
+print(classifier_forest)
+summary(classifier_forest)
+plot(classifier_forest)
+```
+
+# SVM
+
+```{r svm linear}
+train.svm <- train.balance
+test.svm <- test.raw
+dim(train.svm)
+dim(test.svm)
+classifier_svm <- svm(factor(Cover_Type) ~ ., 
+                      data  = train.svm, 
+                      kernel= "linear",
+                      cross = 10, 
+                      type = "C-classification")
+
+print(classifier_svm)
+summary(classifier_svm)
+```
+
+```{r svm radial}
+classifier_svm2 <- svm(factor(Cover_Type) ~ ., 
+                      data  = train.svm, 
+                      kernel= "radial",
+                      cross = 10, 
+                      type = "C-classification")
+print(classifier_svm2)
+summary(classifier_svm2)
+```
+
+```{r svm polynomial}
+classifier_svm3 <- svm(factor(Cover_Type) ~ ., 
+                      data  = train.svm, 
+                      kernel= "polynomial",
+                      cross = 10, 
+                      type = "C-classification")
+print(classifier_svm3)
+summary(classifier_svm3)
+
+```
+
+
+# 7. Performance evaluation
+Confusion Matrix
+KNN Prediction
+```{r predictknn}
+
+y_pred_knn = predict(classifier_knn, newdata = test.knn)
+# Confusion Matrix
+knn.cm <-confusionMatrix(as.factor(test.knn$Cover_Type), as.factor(y_pred_knn))
+print(knn.cm)
+# macro TPR 
+knn.macro.tpr <- mean(knn.cm$byClass[1:7,1])
+# macro FPR 
+knn.macro.fpr <- 1-mean(knn.cm$byClass[1:7,2])
+```
+
+LDA Prediction
+```{r lda prediction}
+#y_pred_lda = predict(model_lda, newdata = test.lda)
+# Confusion Matrix
+#lda.cm <- confusionMatrix(as.factor(test.lda$Cover_Type), as.factor(y_pred_lda))
+#print(lda.cm)
+
+# macro TPR 
+#lda.macro.tpr <- mean(cm$byClass[1:7,1])
+# macro FPR 
+#lda.macro.fpr <- 1-mean(cm$byClass[1:7,2])
+
+```
+
+Decision Tree Prediction
+``` {r predicttree}
+y_pred_tree = predict(classifier_tree, newdata = test.tree)
+# Checking the prediction accuracy
+#table(test.tree$Cover_Type, y_pred_tree) # Confusion matrix
+error_tree <- mean(test.tree$Cover_Type != y_pred_tree) # Misclassification error
+paste('Accuracy',round(1-error_tree,4))
+
+# Confusion Matrix
+tree.cm <-confusionMatrix(as.factor(test.tree$Cover_Type), as.factor(y_pred_tree))
+print(tree.cm)
+# macro TPR 
+tree.macro.tpr <- mean(tree.cm$byClass[1:7,1])
+# macro FPR 
+tree.macro.fpr <- 1-mean(tree.cm$byClass[1:7,2])
+```
+
+Randomforest Prediction
+
+```{r predictrf}
+# prediction on random forest
+y_pred_rf = predict(classifier_forest, newdata = test.rf)
+# Checking the prediction accuracy
+#table(test.rf$Cover_Type, y_pred_rf) # Confusion matrix
+error_rf <- mean(test.rf$Cover_Type != y_pred_rf) # Misclassification error
+paste('Accuracy',round(1-error_rf,4))
+
+# Confusion Matrix
+rf.cm <- confusionMatrix(as.factor(test.rf$Cover_Type), as.factor(y_pred_rf))
+print(rf.cm)
+# macro TPR 
+rf.macro.tpr <- mean(rf.cm$byClass[1:7,1])
+# macro FPR 
+rf.macro.fpr <- 1-mean(rf.cm$byClass[1:7,2])
+```
+
+SVM prediction
+``` {r svm prediction}
+# prediction on SVM
+y_pred_svm = predict(classifier_svm, newdata = test.svm)
+
+# Confusion Matrix
+svm.cm <- confusionMatrix(as.factor(test.svm$Cover_Type), as.factor(y_pred_svm))
+print(svm.cm)
+# macro TPR 
+svm.macro.tpr <- mean(svm.cm$byClass[1:7,1])
+# macro FPR 
+svm.macro.fpr <- 1-mean(svm.cm$byClass[1:7,2])
+```
+
+```{r roc space}
+roc.x = c(knn.macro.fpr,lda.macro.fpr,tree.macro.fpr,rf.macro.fpr,svm.macro.fpr)
+roc.y = c(knn.macro.tpr,lda.macro.tpr,tree.macro.tpr,rf.macro.tpr,svm.macro.tpr)
+
+plot(roc.x,roc.y,col=c(1,2,3,4,5),xlim=c(0,1),ylim=c(0,1),xlab="FPR",ylab="TPR",pch=19)
+title("ROC space")
+legend("topright",legend=c("knn","lda","tree","random forest","svm"),col=c(1,2,3,4,5),lty=1)
+```
+
+# 8. Conclusion
